@@ -6,7 +6,8 @@ from graphite.remote_storage import RemoteStore
 from graphite.node import LeafNode
 from graphite.intervals import Interval, IntervalSet
 from graphite.readers import MultiReader
-from graphite.finders import CeresFinder, StandardFinder
+from graphite.finders import StandardFinder
+from graphite.database import GraphiteDatabase
 
 
 class Store:
@@ -147,8 +148,27 @@ class FindQuery:
 
 
 # Exposed Storage API
-finders = [
-  CeresFinder(settings.CERES_DIR),
-  StandardFinder(settings.STANDARD_DIRS),
-]
+finders = []
+
+# Import configured storage plugin
+db = settings.GRAPHITE_DATABASE
+db_plugin = settings.GRAPHITE_DATABASE_PLUGIN
+
+if db_plugin is not None:
+  try:
+    import importlib
+    i = importlib.import_module(db_plugin)
+  except ImportError as e:
+    raise Exception("No database plugin class found for plugin '%s'. %s" % (db_plugin, str(e)))
+
+# Database-specific settings
+if db not in GraphiteDatabase.plugins:
+  raise Exception("No database plugin implemented for '%s'" % db)
+
+DatabasePlugin = GraphiteDatabase.plugins[db]
+database = DatabasePlugin(settings)
+
+finders.append(database.finder)
+finders.append(StandardFinder(settings.STANDARD_DIRS))
+
 STORE = Store(finders, hosts=settings.CLUSTER_SERVERS)
