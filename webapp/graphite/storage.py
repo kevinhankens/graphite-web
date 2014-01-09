@@ -1,3 +1,4 @@
+import importlib
 import time
 from django.conf import settings
 from graphite.logger import log
@@ -7,7 +8,6 @@ from graphite.node import LeafNode
 from graphite.intervals import Interval, IntervalSet
 from graphite.readers import MultiReader
 from graphite.finders import StandardFinder
-from graphite.database import GraphiteDatabase
 
 
 class Store:
@@ -151,24 +151,26 @@ class FindQuery:
 finders = []
 
 # Import configured storage plugin
-db = settings.GRAPHITE_DATABASE
 db_plugin = settings.GRAPHITE_DATABASE_PLUGIN
-
 if db_plugin is not None:
+  # expect package.class or package.module.class
+  module_name, _, cls_name = db_plugin.rpartition(".") 
+  if not all((module_name, cls_name)):
+    raise ConfigError("Could not extract module name and class name from "\
+      "GRAPHITE_DATABASE_PLUGIN %s" % (db_plugin,))
   try:
-    import importlib
-    i = importlib.import_module(db_plugin)
-  except ImportError as e:
-    raise Exception("No database plugin class found for plugin '%s'. %s" % (db_plugin, str(e)))
+    module = importlib.import_module(module_name)
+  except (ImportError) as e:
+    raise ConfigError("Error importing module %s for graphite database "\
+      "plugin %s, %s" % (module_name, db_plugin, str(e)))
+  
+  try:
+    db_cls = getattr(module, cls_name)
+  except (AttributeError) as e:
+    raise ConfigError("Unknown class %s for graphite database plugin %s, "\
+      "%s" % (cls_name, db_plugin, str(e)))
+  finders.append(db_cls(settings).finder)
 
-# Database-specific settings
-if db not in GraphiteDatabase.plugins:
-  raise Exception("No database plugin implemented for '%s'" % db)
-
-DatabasePlugin = GraphiteDatabase.plugins[db]
-database = DatabasePlugin(settings)
-
-finders.append(database.finder)
 finders.append(StandardFinder(settings.STANDARD_DIRS))
 
 STORE = Store(finders, hosts=settings.CLUSTER_SERVERS)
