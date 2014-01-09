@@ -169,7 +169,7 @@ if db_plugin is not None:
   except (AttributeError) as e:
     raise ConfigError("Unknown class %s for graphite database plugin %s, "\
       "%s" % (cls_name, db_plugin, str(e)))
-  finders.append(db_cls(settings))
+  finders.append(db_cls(settings).finder)
 
 finders.append(StandardFinder(settings.STANDARD_DIRS))
 
