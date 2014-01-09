@@ -155,7 +155,7 @@ db_plugin = settings.GRAPHITE_DATABASE_PLUGIN
 if db_plugin is not None:
   # expect package.class or package.module.class
   module_name, _, cls_name = db_plugin.rpartition(".") 
-  if not all(module_name, cls_name):
+  if not all((module_name, cls_name)):
     raise ConfigError("Could not extract module name and class name from "\
       "GRAPHITE_DATABASE_PLUGIN %s" % (db_plugin,))
   try:
