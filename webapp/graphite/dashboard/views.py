@@ -1,13 +1,15 @@
 import re
 import errno
+import sys
 
 from os.path import getmtime, join, exists
 from urllib import urlencode
 from ConfigParser import ConfigParser
 from django.shortcuts import render_to_response
-from django.http import HttpResponse, QueryDict
+from django.http import QueryDict
 from django.conf import settings
 from django.contrib.auth import login, authenticate, logout
+from graphite.compat import HttpResponse
 from graphite.util import json, getProfile
 from graphite.dashboard.models import Dashboard
 from graphite.render.views import renderView
@@ -109,7 +111,8 @@ def dashboard(request, name=None):
 
   try:
     config.check()
-  except OSError, e:
+  except OSError:
+    e = sys.exc_info()[1]
     if e.errno == errno.ENOENT:
       dashboard_conf_missing = True
     else:
@@ -280,7 +283,7 @@ def create_temporary(request):
 
 
 def json_response(obj):
-  return HttpResponse(mimetype='application/json', content=json.dumps(obj))
+  return HttpResponse(content_type='application/json', content=json.dumps(obj))
 
   
 def user_login(request):
