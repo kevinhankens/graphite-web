@@ -1,0 +1,60 @@
+diff --git a/webapp/graphite/database.py b/webapp/graphite/database.py
+new file mode 100644
+index 0000000..7527c5e
+--- /dev/null
++++ b/webapp/graphite/database.py
+@@ -0,0 +1,6 @@
++
++class GraphiteDatabase(object):
++  "Abstract base class for Carbon database backends"
++
++  def finder(self):
++    raise NotImplemented()
+diff --git a/webapp/graphite/storage.py b/webapp/graphite/storage.py
+index ffa7a31..d0ce69f 100644
+--- a/webapp/graphite/storage.py
++++ b/webapp/graphite/storage.py
+@@ -1,3 +1,4 @@
++import importlib
+ import os, time, fnmatch, socket, errno
+ from django.conf import settings
+ from os.path import isdir, isfile, join, exists, splitext, basename, realpath
+@@ -6,6 +7,7 @@ import whisper
+ from graphite.logger import log
+ from graphite.remote_storage import RemoteStore
+ from graphite.util import unpickle
++from graphite.finders import StandardFinder
+ 
+ try:
+   import rrdtool
+@@ -413,5 +415,30 @@ class RRDDataSource(Leaf):
+ 
+ 
+ # Exposed Storage API
++finders = []
++
++# Import configured storage plugin
++db_plugin = settings.GRAPHITE_DATABASE_PLUGIN
++if db_plugin is not None:
++  # expect package.class or package.module.class
++  module_name, _, cls_name = db_plugin.rpartition(".") 
++  if not all((module_name, cls_name)):
++    raise ConfigError("Could not extract module name and class name from "\
++      "GRAPHITE_DATABASE_PLUGIN %s" % (db_plugin,))
++  try:
++    module = importlib.import_module(module_name)
++  except (ImportError) as e:
++    raise ConfigError("Error importing module %s for graphite database "\
++      "plugin %s, %s" % (module_name, db_plugin, str(e)))
++  
++  try:
++    db_cls = getattr(module, cls_name)
++  except (AttributeError) as e:
++    raise ConfigError("Unknown class %s for graphite database plugin %s, "\
++      "%s" % (cls_name, db_plugin, str(e)))
++  finders.append(db_cls(settings).finder)
++
++finders.append(StandardFinder(settings.STANDARD_DIRS))
++
+ LOCAL_STORE = Store(settings.DATA_DIRS)
+ STORE = Store(settings.DATA_DIRS, remote_hosts=settings.CLUSTER_SERVERS)
